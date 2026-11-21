@@ -26,9 +26,16 @@ const rows = await Effect.runPromise(program.pipe(Effect.provide(Database)))
 console.log(rows)
 ```
 
-`DrizzlePostgresClient.layer` provides both `DrizzlePostgresClient` and `SqlClient`. It opens the pool when it is
+`DrizzlePostgresClient.layer` provides both `DrizzlePostgresClient` and `SqlClient`. It creates the pool when it is
 built and ends the pool when its scope closes. It already includes the transport of the runtime
 that you import it for.
+
+Building the layer opens no connection: the first statement does. A scope that runs no statement, such as a
+request that never reaches the database, costs no connection. To fail when the layer is built, run
+`` sql`select 1` `` in a layer of your own.
+
+When the server is unreachable, a statement waits up to 30 seconds for it to come back. Pass `reconnect: false`
+to fail at once, or `reconnect: { acquireTimeoutMs }` to set the wait.
 
 ## Runtimes
 

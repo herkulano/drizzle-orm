@@ -33,9 +33,9 @@ import type { CursorOptions } from '../cursor.ts';
 import type { RawParams } from '../encode.ts';
 import { PgError } from '../errors.ts';
 import { metricAttributes } from '../plugin.ts';
-import type { Pool } from '../pool.ts';
+import { type Pool, poolServer } from '../pool.ts';
 import type { PgType } from '../spec.ts';
-import type { ConnectConfig, QueryOptions as PostgresQueryOptions, QueryResult } from '../types.ts';
+import type { ConnectConfig, PoolConfig, QueryOptions as PostgresQueryOptions, QueryResult } from '../types.ts';
 import { makeCompiler, PostgresJson, toSqlError, type TransactionOptions } from './shared.ts';
 
 // Shared with the Aurora and HTTP clients, which load them from ./shared.ts without this client's connection code
@@ -221,6 +221,7 @@ export interface DrizzlePostgresClientConfig {
 	readonly pooler?: ConnectConfig['pooler'];
 	readonly pipeline?: ConnectConfig['pipeline'];
 	readonly types?: ConnectConfig['types'];
+	readonly reconnect?: PoolConfig['reconnect'];
 }
 
 /** The client settings that apply on top of an existing pool. */
@@ -238,15 +239,8 @@ export const fromPool = Effect.fnUntraced(
 	function*(options: FromPoolOptions & { readonly acquire: Effect.Effect<Pool, SqlError, Scope.Scope> }) {
 		const { acquire: acquirePool, ...config } = options;
 		const pool = yield* acquirePool;
-		// Connect once, so a wrong config fails when the layer is built and not at the first statement.
-		const target = yield* Effect.tryPromise({
-			try: () =>
-				pool.acquire().then((conn) => {
-					pool.release(conn);
-					return { host: conn.cfg.path ?? conn.cfg.host, port: conn.cfg.port, database: conn.cfg.database };
-				}),
-			catch: (e) => toSqlError(e, 'connect'),
-		});
+		// Read from the pool's config: building the client opens no connection, the first statement does.
+		const target = poolServer(pool);
 		const compiler = makeCompiler(config.transformQueryNames, config.transformJson);
 		const transformRows = config.transformResultNames
 			? Statement.defaultTransforms(config.transformResultNames, config.transformJson).array
@@ -291,9 +285,9 @@ export const fromPool = Effect.fnUntraced(
 		const spanAttributes = [
 			...(config.spanAttributes ? Object.entries(config.spanAttributes) : []),
 			['db.system.name', 'postgresql'],
-			['db.namespace', target.database],
-			['server.address', target.host],
-			['server.port', target.port],
+			...(target
+				? [['db.namespace', target.database], ['server.address', target.host], ['server.port', target.port]] as const
+				: []),
 			['driver', 'drizzle-postgres'],
 		] satisfies ReadonlyArray<readonly [string, unknown]>;
 		const client = yield* Client.make({

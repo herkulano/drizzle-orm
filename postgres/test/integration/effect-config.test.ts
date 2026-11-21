@@ -55,7 +55,7 @@ describe('DrizzlePostgresClient.layerConfig', () => {
 
 describe('ssl', () => {
 	// The driver's meanings, as in the async entry point: `true` encrypts without verifying, 'verify-full' verifies
-	test("ssl: 'verify-full' verifies the certificate, so the layer refuses the self-signed test server", async () => {
+	test("ssl: 'verify-full' verifies the certificate, so the first statement refuses the self-signed test server", async () => {
 		const exit = await Effect.runPromise(Effect.exit(Effect.provide(
 			Effect.flatMap(Effect.service(SqlClient), (sql) => sql`select 1`),
 			DrizzlePostgresClient.layer(testClientConfig({ ssl: 'verify-full' })),

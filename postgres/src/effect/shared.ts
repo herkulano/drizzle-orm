@@ -17,7 +17,7 @@ import {
 } from 'effect/sql/SqlError';
 import type { Custom } from 'effect/sql/Statement';
 import * as Statement from 'effect/sql/Statement';
-import { isConnectionLost as isConnectionLostError, PgError } from '../errors.ts';
+import { isConnectFailed, isConnectionLost as isConnectionLostError, PgError } from '../errors.ts';
 
 export interface TransactionOptions {
 	readonly isolation?: 'serializable' | 'repeatable read' | 'read committed' | 'read uncommitted' | undefined;
@@ -84,7 +84,9 @@ export const toSqlError = (cause: unknown, operation: string, conn?: { readonly 
 		return new SqlError({ reason: classifySqlState(cause.code, cause.constraint, { cause, message, operation }) });
 	}
 	const props = { cause, message, operation };
-	if (isConnectionLost || conn === undefined) return new SqlError({ reason: new ConnectionError(props) });
+	if (isConnectionLost || conn === undefined || isConnectFailed(cause)) {
+		return new SqlError({ reason: new ConnectionError(props) });
+	}
 	return new SqlError({ reason: new UnknownError(props) });
 };
 

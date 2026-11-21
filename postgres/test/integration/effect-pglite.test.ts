@@ -72,7 +72,7 @@ describe('DrizzlePostgresClient over PGlite', () => {
 	});
 
 	test('closing the layer leaves PGlite open', async () => {
-		await run(Effect.void);
+		await run(Effect.flatMap(Effect.service(SqlClient), (sql) => sql`select 1`));
 		expect((await pg.query('select 2 as two')).rows).toEqual([{ two: 2 }]);
 	});
 });

@@ -24,9 +24,11 @@ import {
 	isUntrustedCertificate,
 	pipelineDepthOf,
 	prepareOf,
+	serverOf,
 } from './connection.ts';
 import type { TxFn } from './connection.ts';
 import { Cursor, type CursorOptions } from './cursor.ts';
+import { markConnectFailed } from './errors.ts';
 import type { QueryMetrics } from './plugin.ts';
 import type { PoolConfig, QueryOptions, QueryResult, TxOptions } from './types.ts';
 import type { BatchMetrics, BatchResult, BatchRunOptions } from './types.ts';
@@ -96,6 +98,14 @@ const TX_GUARD_MSG =
 	+ 'makes the mistake unwriteable. If you really do want a separate connection here, wrap it in '
 	+ 'pool.outsideTransaction(() => ...). Disable this check with { txGuard: false }.';
 
+type PoolServer = ReturnType<typeof serverOf>;
+// Under a registered symbol and not a member: a Pool from another copy of the package must still fit this one's
+// Pool type, and a copy from before this symbol has none.
+const POOL_SERVER = Symbol.for('drizzle-postgres.poolServer');
+/** The server that a pool's connections go to, read from its config without connecting, or undefined for a pool
+ *  from a copy of the package that does not record it. */
+export const poolServer = (pool: Pool): PoolServer | undefined => (pool as { [POOL_SERVER]?: PoolServer })[POOL_SERVER];
+
 export class Pool {
 	private cfg: PoolConfig;
 	private decode?: DecodeState; // decoders + row mapper cache, shared by this pool's connections only
@@ -144,6 +154,7 @@ export class Pool {
 	constructor(config: string | PoolConfig = {}) {
 		const cfg = resolveUrl(typeof config === 'string' ? { url: config } : config); // string / url -> config
 		this.cfg = cfg;
+		(this as { [POOL_SERVER]?: PoolServer })[POOL_SERVER] = serverOf(cfg);
 		this.max = cfg.max ?? 10;
 		const rc = cfg.reconnect;
 		this.rcEnabled = rc !== false;
@@ -356,14 +367,14 @@ export class Pool {
 				...(connectTimeout === undefined ? {} : { connectTimeout }),
 			}, this.decode);
 		} catch (e) {
-			throw Object.assign(e as Error, { fatal: true });
+			throw markConnectFailed(Object.assign(e as Error, { fatal: true }));
 		}
 		this.all.add(conn);
 		try {
 			await conn.connect();
 		} catch (e) {
 			this.all.delete(conn);
-			throw e;
+			throw markConnectFailed(e);
 		}
 		return conn;
 	}
@@ -441,8 +452,8 @@ export class Pool {
 	private waitForRecovery(): Promise<void> {
 		// Built HERE, not in the setTimeout callback: a timer-built Error's stack is just Timeout._onTimeout
 		// with no application frame, which is useless for finding the query that was waiting.
-		const timedOut = new Error(
-			`pool acquire timed out after ${this.acquireTimeout}ms waiting for the database to recover`,
+		const timedOut = markConnectFailed(
+			new Error(`pool acquire timed out after ${this.acquireTimeout}ms waiting for the database to recover`),
 		);
 		return new Promise<void>((resolve, reject) => {
 			let done = false;

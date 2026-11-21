@@ -84,10 +84,12 @@ describe('DrizzlePostgresClient layer', () => {
 		}
 	});
 
-	test('building the layer connects, and closing its scope ends the pool', async () => {
+	test('the first statement connects, not the layer, and closing its scope ends the pool', async () => {
 		const pool = await Effect.runPromise(Effect.scoped(Effect.gen(function*() {
 			const context = yield* Layer.build(testLayer());
 			const client = Context.get(context, DrizzlePostgresClient.DrizzlePostgresClient);
+			expect(client.pool.size).toBe(0);
+			yield* client`select 1`;
 			expect(client.pool.size).toBe(1);
 			return client.pool;
 		})));
@@ -95,13 +97,13 @@ describe('DrizzlePostgresClient layer', () => {
 		expect(await pool.query('select 1').then(() => 'ran', (e: unknown) => (e as Error).message)).toBe('pool is closed');
 	});
 
-	test('a layer with a wrong password fails to build with an AuthenticationError', async () => {
-		const exit = await Effect.runPromiseExit(
-			Effect.scoped(Layer.build(testLayer({ password: Redacted.make('wrong') }))),
+	test('a wrong password fails the first statement with an AuthenticationError', async () => {
+		const error = await Effect.runPromise(
+			Effect.flatMap(Effect.service(SqlClient), (sql) => Effect.flip(sql`select 1`)).pipe(
+				Effect.provide(testLayer({ password: Redacted.make('wrong') })),
+			),
 		);
-		expect(Exit.isFailure(exit)).toBe(true);
-		const err = (exit as Exit.Failure<unknown, SqlError>).cause.reasons[0] as unknown as { error: SqlError };
-		expect(err.error.reason._tag).toBe('AuthenticationError');
+		expect(error.reason._tag).toBe('AuthenticationError');
 	});
 
 	// What an `ssl` value means is the driver's logic, the same for both entry points: `true` encrypts without

@@ -30,6 +30,7 @@ export const toPoolConfig = (config: DrizzlePostgresClientConfig) => ({
 	pooler: config.pooler,
 	pipeline: config.pipeline,
 	types: config.types,
+	reconnect: config.reconnect,
 } satisfies PoolConfig);
 
 /** A client over the pool that `create` returns. The pool opens now and ends when the scope closes. */

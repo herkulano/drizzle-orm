@@ -466,6 +466,17 @@ export function behindPoolerOf(config: ConnectConfig): boolean {
 	return config.pooler ?? transactionPoolerDetected(host, port);
 }
 
+/** The server that a (url-resolved) config's connections go to, resolved the way the Connection constructor
+ *  does and without connecting. A unix-domain socket path stands in for the host. */
+export function serverOf(config: ConnectConfig): { host: string; port: number; database: string } {
+	const user = config.user || process.env.PGUSER || defaultUser();
+	return {
+		host: config.path ?? (config.host || process.env.PGHOST || 'localhost'),
+		port: config.port || Number(process.env.PGPORT) || 5432,
+		database: config.database || process.env.PGDATABASE || user,
+	};
+}
+
 /** Whether a (url-resolved) config's connections use server-side named statements: `prepare`, else off
  *  behind a transaction pooler that doesn't keep them across backends (all but Neon's and PlanetScale's). */
 export function prepareOf(config: ConnectConfig): boolean {

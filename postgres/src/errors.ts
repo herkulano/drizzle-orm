@@ -98,3 +98,20 @@ export function markConnectionLost<E>(error: E): E {
 export function isConnectionLost(error: unknown): boolean {
 	return typeof error === 'object' && error !== null && CONNECTION_LOST in error;
 }
+
+const CONNECT_FAILED = Symbol.for('@drizzle-team/postgres/connectFailed');
+
+/** Marks `error` as a failure to open a connection: the query did not run. */
+export function markConnectFailed<E>(error: E): E {
+	if (typeof error === 'object' && error !== null && !(CONNECT_FAILED in error)) {
+		try {
+			Object.defineProperty(error, CONNECT_FAILED, { value: true });
+		} catch { /* a frozen error stays unmarked */ }
+	}
+	return error;
+}
+
+/** Whether a query failed because no connection could be opened for it, as {@link markConnectFailed} marks it. */
+export function isConnectFailed(error: unknown): boolean {
+	return typeof error === 'object' && error !== null && CONNECT_FAILED in error;
+}
