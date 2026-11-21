@@ -4,7 +4,9 @@
 import { describe, expect, test } from 'bun:test';
 import fc from 'fast-check';
 import { compileParamPlan, encodeParam, encodeValueInto } from '../../src/encode.ts';
+import { NulByteError } from '../../src/errors.ts';
 import { parseParameterDescription, writeBind, writeBindWith, writeParse, Writer } from '../../src/protocol.ts';
+import { caught } from '../helpers/db.ts';
 
 const legacyBytes = (params: unknown[], resultFormat: number | number[] = 0): Buffer => {
 	const w = new Writer();
@@ -115,9 +117,12 @@ describe('write-through TEXT encoding is byte-identical to encodeParam + writeBi
 		);
 	});
 
-	test('NUL byte in a string still throws (same message)', () => {
-		expect(() => throughBytes(['a\0b'])).toThrow(/NUL byte/);
-		expect(() => legacyBytes(['a\0b'])).toThrow(/NUL byte/);
+	test('NUL byte in a string throws a NulByteError with SQLSTATE 22021 in both paths (same message)', async () => {
+		for (const bytes of [throughBytes, legacyBytes]) {
+			const err = await caught(() => bytes(['a\0b']));
+			expect(err).toBeInstanceOf(NulByteError);
+			expect(err).toMatchObject({ code: '22021', message: expect.stringMatching(/NUL byte/) });
+		}
 	});
 });
 

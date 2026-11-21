@@ -3,9 +3,11 @@
 // array_recv format: ndim, hasnull, elemOid, [len, lbound], elements.
 import { describe, expect, test } from 'bun:test';
 import { arrayLiteral, compileParamPlan, encodeJsonParam, encodeJsonParams, encodeParam } from '../../src/encode.ts';
+import { NulByteError } from '../../src/errors.ts';
 import { Writer } from '../../src/protocol.ts';
 import { writeBindWith } from '../../src/protocol.ts';
 import { paramTypeOid, resolveParamTypes } from '../../src/spec.ts';
+import { caught } from '../helpers/db.ts';
 
 function bindVals(oids: number[], params: unknown[]): { fmts: number[]; vals: (Buffer | null)[] } {
 	const plan = compileParamPlan(oids);
@@ -151,5 +153,11 @@ describe('encodeJsonParam / encodeJsonParams (HTTP request encoding)', () => {
 	test('encodeJsonParams applies OIDs positionally (and never mistakes the map index for one)', () => {
 		expect(encodeJsonParams([['a'], ['b']], [3802, 1009])).toEqual(['["a"]', '{"b"}']);
 		expect(encodeJsonParams([['a'], ['b']])).toEqual(['{"a"}', '{"b"}']);
+	});
+
+	test("a NUL byte in a string throws the wire encoder's NulByteError (SQLSTATE 22021)", async () => {
+		const err = await caught(() => encodeJsonParam('a\0b'));
+		expect(err).toBeInstanceOf(NulByteError);
+		expect(err).toMatchObject({ code: '22021', message: expect.stringMatching(/NUL byte/) });
 	});
 });

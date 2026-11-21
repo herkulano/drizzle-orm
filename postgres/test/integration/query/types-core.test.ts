@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createHash, randomBytes } from 'node:crypto';
 import { buildDecoders } from '../../../src/decode.ts';
 import { defaultDecoders } from '../../../src/index.ts';
-import type { Connection } from '../../../src/index.ts';
+import type { Connection, NulByteError } from '../../../src/index.ts';
 import { caught, PgError, TEST_TIMEOUT, testConnect } from '../../helpers/db.ts';
 
 // --- tiny accessors honoring noUncheckedIndexedAccess ---------------------
@@ -487,9 +487,10 @@ describe('UTF-8 fidelity, multibyte & NUL guards', () => {
 		}
 	}, TEST_TIMEOUT); // 300 sequential round-trips: needs headroom over a WAN link (see DRIZZLE_POSTGRES_TEST_TIMEOUT_MS)
 
-	test('NUL-byte param rejected client-side with /NUL/; connection stays usable', async () => {
+	test('NUL-byte param rejected client-side with /NUL/ and SQLSTATE 22021; connection stays usable', async () => {
 		const err = await caught(() => c.query('select $1::text a', ['a\0b']));
 		expect((err as Error).message).toMatch(/NUL/);
+		expect((err as NulByteError).code).toBe('22021');
 		const ok = await c.query("select 'fine'::text a");
 		expect(aCell(ok)).toBe('fine');
 	});

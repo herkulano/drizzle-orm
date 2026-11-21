@@ -67,6 +67,21 @@ export class PgError extends Error {
 
 addBrand(PgError, 'PgError');
 
+/** What the driver throws for a text parameter that holds a NUL byte (0x00), which PostgreSQL text values cannot
+ *  represent. The driver rejects the value before the statement is sent, so this is no {@link PgError}. `code` is
+ *  the SQLSTATE the server gives for such a value (character_not_in_repertoire), so a check on the code holds as it
+ *  does with a driver that sends the value. */
+export class NulByteError extends Error {
+	readonly code = '22021';
+
+	constructor() {
+		super('parameter contains NUL byte (0x00), which PostgreSQL text values cannot represent');
+		this.name = 'NulByteError';
+	}
+}
+
+addBrand(NulByteError, 'NulByteError');
+
 /** Parse the body of an 'E'/'N' message: a run of (code-byte + cstring), terminated by \0. */
 export function parseErrorFields(body: Buffer): PgErrorFields {
 	const out: PgErrorFields = {};

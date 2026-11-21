@@ -4,7 +4,7 @@
 // Grounded in src/errors.ts (PgError + parseErrorFields) and src/connection.ts.
 // Read-only shared table public.t is NOT touched; all fixtures use TEMP tables.
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { parseErrorFields, PgError as PgErrorClass } from '../../src/errors.ts';
+import { NulByteError, parseErrorFields, PgError as PgErrorClass } from '../../src/errors.ts';
 import type { Connection } from '../../src/index.ts';
 import { caught, PgError, testConnect } from '../helpers/db.ts';
 
@@ -186,12 +186,12 @@ describe('error-class identity & exports', () => {
 		expect((pe.stack ?? '').length).toBeGreaterThan(0);
 	});
 
-	test('DEVIATION GUARD: client-level errors are plain Error with no .code, not PgError', async () => {
+	test('DEVIATION GUARD: client-level errors are not PgError; a NUL byte is a NulByteError with SQLSTATE 22021', async () => {
 		// NUL byte in a param is rejected client-side during encoding
 		const e1 = await caught(() => c.query('select $1::text', ['a b']));
-		expect(e1).toBeInstanceOf(Error);
+		expect(e1).toBeInstanceOf(NulByteError);
 		expect(e1).not.toBeInstanceOf(PgError);
-		expect((e1 as { code?: unknown }).code).toBeUndefined();
+		expect((e1 as NulByteError).code).toBe('22021');
 
 		// query() after end() rejects (catchable), also a plain Error
 		const dead = await testConnect();

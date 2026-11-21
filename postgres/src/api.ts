@@ -7,7 +7,7 @@ export { Cursor } from './cursor.ts';
 export type { CursorOptions } from './cursor.ts';
 export { defaultDecoders } from './decode.ts';
 export { isRawParams, type RawParams, rawParams } from './encode.ts';
-export { PgError } from './errors.ts';
+export { NulByteError, PgError } from './errors.ts';
 export { Collect, CollectNullable, Json, JsonArray, Jsonb, JsonbArray, Nullable, Transform } from './json.ts';
 export type {
 	CollectMarker,

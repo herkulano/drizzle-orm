@@ -520,6 +520,9 @@ const error = await Effect.runPromise(Effect.gen(function* () {
 console.log(error.reason._tag) // 'SqlSyntaxError', from SQLSTATE 42P01
 ```
 
+A text parameter that holds a NUL byte never reaches the server: the driver rejects it with a `NulByteError`. The
+reason is an `UnknownError`, and its `cause` has `code: '22021'`, the SQLSTATE the server gives for such a value.
+
 ## Spans
 
 Effect core creates one span per statement with `db.system.name`, `db.namespace`,

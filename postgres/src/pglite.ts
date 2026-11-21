@@ -29,7 +29,15 @@
 //   - There is no out-of-band cancel: the engine runs on this thread, so a running statement can't be
 //     interrupted. Canceling a query (AbortSignal, a timeout) closes the connection once it is its turn.
 import { addBrand } from './brand.ts';
-import { connect as coreConnect, Connection, createPool as corePool, defaultDecoders, PgError, Pool } from './core.ts';
+import {
+	connect as coreConnect,
+	Connection,
+	createPool as corePool,
+	defaultDecoders,
+	NulByteError,
+	PgError,
+	Pool,
+} from './core.ts';
 import type { ConnectConfig, PoolConfig, PostgresSocket, Transport } from './types.ts';
 
 /** The part of a PGlite instance this entry uses (PGlite 0.3 and later). */
@@ -452,5 +460,5 @@ export function createPool(pg: PGliteLike, config: PGlitePoolConfig = {}): Pool 
 
 addBrand(PGliteSocket, 'PGliteSocket');
 
-export { Connection, defaultDecoders, PgError, Pool };
+export { Connection, defaultDecoders, NulByteError, PgError, Pool };
 export type { ConnectConfig, PoolConfig };

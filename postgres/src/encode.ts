@@ -4,6 +4,7 @@
 // lives in decode.ts; ELEM_OID (array OID -> element OID) is shared from there.
 import { addBrand } from './brand.ts';
 import { ELEM_OID } from './decode.ts';
+import { NulByteError } from './errors.ts';
 import { type ParamsEncoder, W, Writer } from './protocol.ts'; // protocol.ts only type-imports from here -> no runtime cycle
 
 export interface EncodedParam {
@@ -31,11 +32,9 @@ export function encodeParam(v: unknown): EncodedParam {
 	if (Array.isArray(v)) return { format: 0, bytes: Buffer.from(arrayLiteral(v), 'utf8') }; // JS array -> PG '{…}' literal, not JSON
 	if (typeof v === 'object') return { format: 0, bytes: Buffer.from(JSON.stringify(v), 'utf8') };
 	const s = String(v);
-	if (s.indexOf('\0') !== -1) throw new Error(NUL_MSG);
+	if (s.indexOf('\0') !== -1) throw new NulByteError();
 	return { format: 0, bytes: Buffer.from(s, 'utf8') };
 }
-
-const NUL_MSG = 'parameter contains NUL byte (0x00), which PostgreSQL text values cannot represent';
 
 /** Write-through param encoding: ONE value straight into the Bind message being built in `w`
  *  (int32 length + payload), TEXT format, byte-identical to encodeParam — but with zero
@@ -56,7 +55,7 @@ export function encodeValueInto(w: Writer, v: unknown): number {
 			else w.lpAsc(String(v)); // fraction/exponent/NaN/Infinity: ASCII digits, no NUL — latin1
 			return 0;
 		case 'string':
-			if (v.indexOf('\0') !== -1) throw new Error(NUL_MSG);
+			if (v.indexOf('\0') !== -1) throw new NulByteError();
 			w.lpStr(v);
 			return 0;
 		case 'boolean':
@@ -76,7 +75,7 @@ export function encodeValueInto(w: Writer, v: unknown): number {
 			return 0;
 		default: { // bigint (digits), symbol/function (String() nonsense — same as encodeParam)
 			const s = String(v);
-			if (s.indexOf('\0') !== -1) throw new Error(NUL_MSG);
+			if (s.indexOf('\0') !== -1) throw new NulByteError();
 			if (typeof v === 'bigint') w.lpAsc(s);
 			else w.lpStr(s); // bigint digits are ASCII (latin1); symbol/function may be unicode
 			return 0;
@@ -638,7 +637,7 @@ export function compileBindEncoder(
 			case 25:
 			case 1043:
 				s =
-					`if (typeof x === 'string') { if (x.indexOf('\\u0000') !== -1) throw new Error(NUL_MSG); w.lpStr(x) } else { const f = enc(w, x); if (f !== 0) w.patch16(${off}, f) }`;
+					`if (typeof x === 'string') { if (x.indexOf('\\u0000') !== -1) throw new NulByteError(); w.lpStr(x) } else { const f = enc(w, x); if (f !== 0) w.patch16(${off}, f) }`;
 				break;
 			default:
 				s = `const f = C[${c}](w, x); if (f !== 0) w.patch16(${off}, f)`; // non-fast (baked 0): exact writeBindWith semantics
@@ -663,9 +662,20 @@ export function compileBindEncoder(
 		'MS_SAFE',
 		'I64_MIN',
 		'I64_MAX',
-		'NUL_MSG',
+		'NulByteError',
 		`return (w, v) => { ${src} }\n//# sourceURL=${srcName}`,
-	)(PREFIX, RESULTFMT, EXECSYNC, encodeValueInto, C, PG_EPOCH_MS, MS_SAFE, I64_MIN, I64_MAX, NUL_MSG) as BindEncoder;
+	)(
+		PREFIX,
+		RESULTFMT,
+		EXECSYNC,
+		encodeValueInto,
+		C,
+		PG_EPOCH_MS,
+		MS_SAFE,
+		I64_MIN,
+		I64_MAX,
+		NulByteError,
+	) as BindEncoder;
 }
 
 // ---- rawParams(): pre-encoded Bind parameters (the request-side mirror of mode:'wire') --------
@@ -712,9 +722,7 @@ export function encodeJsonParam(v: unknown, declaredOid?: number): unknown {
 	if (typeof v === 'bigint') return v.toString();
 	if (Array.isArray(v)) return arrayLiteral(v); // PG array literal '{a,b}'; JSON.stringify here yields 22P02 "malformed array literal"
 	if (typeof v === 'object') return JSON.stringify(v); // plain object -> json/jsonb text
-	if (typeof v === 'string' && v.indexOf('\0') !== -1) {
-		throw new Error('parameter contains NUL byte (0x00), which PostgreSQL text values cannot represent');
-	}
+	if (typeof v === 'string' && v.indexOf('\0') !== -1) throw new NulByteError();
 	return v; // number | string | boolean
 }
 

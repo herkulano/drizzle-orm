@@ -5,7 +5,9 @@
 import { describe, expect, test } from 'bun:test';
 import fc from 'fast-check';
 import { compileBindEncoder, compileParamPlan, encodeValueInto } from '../../src/encode.ts';
+import { NulByteError } from '../../src/errors.ts';
 import { writeBindWith, writeExecute, Writer, writeSync } from '../../src/protocol.ts';
+import { caught } from '../helpers/db.ts';
 
 const ref = (name: string, oids: number[], params: unknown[], rf: number | number[]): Buffer => {
 	const w = new Writer(1 << 16);
@@ -122,6 +124,13 @@ describe('compileBindEncoder byte-identity — matrix', () => {
 		expect(bothOrNeither('', [25], ['a\0b'], 0)).toBe(true);
 		expect(bothOrNeither('', [1184], [new Date(NaN)], 0)).toBe(true);
 		expect(bothOrNeither('', [114], [{ big: 1n }], 0)).toBe(true); // JSON.stringify(bigint) throws
+	});
+	test('NUL string in a text column throws the same NulByteError (SQLSTATE 22021) as the generic path', async () => {
+		for (const encode of [jit, ref]) {
+			const err = await caught(() => encode('', [25], ['a\0b'], 0));
+			expect(err).toBeInstanceOf(NulByteError);
+			expect(err).toMatchObject({ code: '22021', message: expect.stringMatching(/NUL byte/) });
+		}
 	});
 });
 

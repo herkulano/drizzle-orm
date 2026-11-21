@@ -16,7 +16,7 @@ import { buildDecoders } from './decode.ts';
 import { type CodegenCol, INSTANT_OIDS, tagArrayCol } from './decode.ts';
 import { defaultDecoders } from './decode.ts';
 import { encodeJsonParams as encodeParams, setTransactionSnapshotSql } from './encode.ts';
-import { PgError } from './errors.ts';
+import { NulByteError, PgError } from './errors.ts';
 import { RowArena, type RowMapper, RowMappers, SeenBytes } from './mapper.ts';
 import { parseDataRow } from './protocol.ts';
 import type { ShapeMapper } from './shape.ts';
@@ -544,4 +544,4 @@ export function createPool(config: string | NeonHttpConfig = {}): NeonHttpClient
 	return new NeonHttpClient(config);
 }
 
-export { defaultDecoders, PgError };
+export { defaultDecoders, NulByteError, PgError };

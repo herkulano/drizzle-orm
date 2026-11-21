@@ -17,7 +17,7 @@ import './buffer-polyfill.ts'; // MUST be first: installs Buffer on runtimes wit
 import { addBrand } from './brand.ts';
 import { buildDecoders, type CodegenCol, INSTANT_OIDS, tagArrayCol } from './decode.ts';
 import { encodeJsonParams, setTransactionSnapshotSql } from './encode.ts';
-import { parseErrorFields, PgError } from './errors.ts';
+import { NulByteError, parseErrorFields, PgError } from './errors.ts';
 import { type RowMapper, RowMappers } from './mapper.ts';
 import { parseCommandComplete, Parser, type RawMessage } from './protocol.ts';
 import type { ShapeMapper } from './shape.ts';
@@ -524,5 +524,5 @@ function parseDataRowCells(b: Buffer): (Buffer | null)[] {
 export function client(config: HttpConfig): HttpClient {
 	return new HttpClient(config);
 }
-export { PgError };
+export { NulByteError, PgError };
 export type { Decoder, QueryResult, ResultMode };

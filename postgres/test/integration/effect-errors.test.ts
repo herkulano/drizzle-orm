@@ -4,6 +4,7 @@ import { Cause, Effect, Exit, Fiber, Redacted } from 'effect';
 import { SqlClient } from 'effect/sql/SqlClient';
 import type { SqlError } from 'effect/sql/SqlError';
 import { DrizzlePostgresClient } from '../../src/effect/index.ts';
+import { NulByteError } from '../../src/index.ts';
 import { PgError, testPool } from '../helpers/db.ts';
 import { runTest } from '../helpers/effect.ts';
 
@@ -184,5 +185,17 @@ describe('SqlError reasons', () => {
 		const err = await sqlError(run('select 1 / 0'));
 		expect(err.reason._tag).toBe('UnknownError');
 		expect((err.reason.cause as PgError).code).toBe('22012');
+	});
+
+	test('a NUL byte in a text parameter carries SQLSTATE 22021, and the connection stays usable', async () => {
+		const [err, after] = await runTest(Effect.gen(function*() {
+			const sql = yield* SqlClient;
+			const err = yield* Effect.flip(sql`select ${'a\0b'}::text as v`);
+			return [err, yield* sql<{ n: number }>`select 1 as n`] as const;
+		}));
+		expect(err.reason._tag).toBe('UnknownError');
+		expect(err.reason.cause).toBeInstanceOf(NulByteError);
+		expect((err.reason.cause as NulByteError).code).toBe('22021');
+		expect(after).toEqual([{ n: 1 }]);
 	});
 });

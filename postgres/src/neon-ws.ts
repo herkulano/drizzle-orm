@@ -12,7 +12,15 @@
 // `host => `${host}/v2``, `wss://`.
 import { Duplex } from 'node:stream';
 import { NEON_PROXY } from './connection.ts';
-import { connect as coreConnect, Connection, createPool as corePool, defaultDecoders, PgError, Pool } from './core.ts';
+import {
+	connect as coreConnect,
+	Connection,
+	createPool as corePool,
+	defaultDecoders,
+	NulByteError,
+	PgError,
+	Pool,
+} from './core.ts';
 import type { ConnectConfig, PoolConfig } from './types.ts';
 import { relaxChannelBinding, resolveUrl } from './url.ts';
 
@@ -195,5 +203,5 @@ export function createPool(config: string | NeonPoolConfig = {}): Pool {
 	});
 }
 
-export { Connection, defaultDecoders, PgError, Pool };
+export { Connection, defaultDecoders, NulByteError, PgError, Pool };
 export type { ConnectConfig, PoolConfig };
